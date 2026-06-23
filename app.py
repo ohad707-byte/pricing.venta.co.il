@@ -35,8 +35,11 @@ DEFAULT_PRICE_ROWS = [
     {"key": "CO", "category": "גלאי CO", "description": "גלאי CO", "unit": "יח'", "buy_price": 0.0},
     {"key": "GAS", "category": "צנרת גז", "description": "נקודת צנרת גז", "unit": "נק'", "buy_price": 0.0},
     {"key": "CFM", "category": "מפוח / ספיקה", "description": "מפוח לפי CFM", "unit": "יח'", "buy_price": 0.0},
-    {"key": "DUCT", "category": "תעלות / שרשור", "description": "תעלה / שרשור לפי מידה", "unit": "יח'", "buy_price": 0.0},
-    {"key": "TRT", "category": "תרמוסטט", "description": "תרמוסטט / בקר", "unit": "יח'", "buy_price": 0.0},
+    {"key": "GRILLE", "category": "תריס / גריל", "description": "תריס / גריל לפי CFM", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DUCT_RECT", "category": "תעלה מלבנית", "description": "תעלה מלבנית לפי מידה", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DUCT_ROUND", "category": "תעלה עגולה / שרשור", "description": "תעלה עגולה / שרשור", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DAMPER", "category": "מדף / דמפר", "description": "מדף / דמפר", "unit": "יח'", "buy_price": 0.0},
+    {"key": "TRT", "category": "תרמוסטט / בקר", "description": "תרמוסטט / בקר", "unit": "יח'", "buy_price": 0.0},
 ]
 
 DEFAULT_PATTERNS = [
@@ -47,9 +50,13 @@ DEFAULT_PATTERNS = [
     ("מזגן Electra", r"Electra\s+aaa\s+INV\s+180", "יח'"),
     ("גלאי CO", r"\bCO\b", "יח'"),
     ("צנרת גז", r"\bGAS\b", "נק'"),
-    ("מפוח / ספיקה", r"\d{3,6}\s*cfm", "יח'"),
-    ("תעלות / שרשור", r"Ø\s*\d+\s*(?:cm|\")|\d+\s*/\s*\d+", "יח'"),
-    ("תרמוסטט", r"\bTrT\b|\bT[1-4]\b", "יח'"),
+    ("מפוח", r"(?:\d{4,6}\s*cfm|\b[0-9]{3}[-\s]*[0-9]{2}[-\s]*[0-9]{3}\b)", "יח'"),
+    ("תריס / גריל", r"(?:250|300|350|400|450|500|600|700|800)\s*cfm", "יח'"),
+    ("תעלה מלבנית", r"\b(?:60|80|100|120|130|160|185|230|310|400)\s*/\s*(?:30|40|50|60|80)\b", "יח'"),
+    ("תעלה עגולה / שרשור", r"Ø\s*\d+\s*(?:cm|\")|\b(?:6|8|10|12)\s*\"", "יח'"),
+    ("מדף / דמפר", r"\b(?:FD|MD|FSD|DAMPER)\b|מדף|דמפר", "יח'"),
+    ("תרמוסטט / בקר", r"\bTrT\b|\bT[1-4]\b", "יח'"),
+    ("לוח חשמל / בקרה", r"לוח|כבילה|בקרה|CO\s*PANEL", "יח'"),
 ]
 
 SECTION_KEYWORDS = {
@@ -105,7 +112,12 @@ def extract_pdf_text(uploaded) -> Tuple[str, int, Image.Image | None]:
 
 
 def default_pricing_df() -> pd.DataFrame:
-    return pd.DataFrame(DEFAULT_PRICE_ROWS)
+    df = pd.DataFrame(DEFAULT_PRICE_ROWS)
+    if "sell_price" not in df.columns:
+        df["sell_price"] = 0.0
+    if "notes" not in df.columns:
+        df["notes"] = ""
+    return df[["key", "category", "description", "unit", "buy_price", "sell_price", "notes"]]
 
 
 def load_pricing_from_excel(uploaded) -> pd.DataFrame:
@@ -129,7 +141,7 @@ def load_pricing_from_excel(uploaded) -> pd.DataFrame:
                 continue
             nums = [x for x in vals if isinstance(x, (int, float)) and pd.notna(x)]
             buy = nums[-1] if nums else 0
-            frames.append({"key": normalize_model(desc), "category": "לפי מחירון", "description": desc, "unit": "יח'", "buy_price": float(buy)})
+            frames.append({"key": normalize_model(desc), "category": "לפי מחירון", "description": desc, "unit": "יח'", "buy_price": float(buy), "sell_price": 0.0, "notes": "נטען מקובץ Excel"})
 
     if not frames:
         return base
@@ -137,22 +149,42 @@ def load_pricing_from_excel(uploaded) -> pd.DataFrame:
     return pd.concat([extra, base], ignore_index=True)
 
 
-def find_price(pricing: pd.DataFrame, category: str, model: str) -> float:
+def find_prices(pricing: pd.DataFrame, category: str, model: str, margin: float) -> Tuple[float, float]:
     if pricing.empty:
-        return 0.0
+        return 0.0, 0.0
     model_norm = normalize_model(model)
+    selected = None
     if model_norm:
         for _, row in pricing.iterrows():
-            key = str(row.get("key", ""))
-            desc = str(row.get("description", ""))
+            key = normalize_model(row.get("key", ""))
+            desc = normalize_model(row.get("description", ""))
             if key and (key in model_norm or model_norm in key):
-                return float(row.get("buy_price", 0) or 0)
-            if desc and normalize_model(desc) in model_norm:
-                return float(row.get("buy_price", 0) or 0)
-    hits = pricing[pricing["category"].astype(str).str.contains(category, na=False, regex=False)]
-    if len(hits):
-        return float(hits.iloc[0].get("buy_price", 0) or 0)
-    return 0.0
+                selected = row
+                break
+            if desc and (desc in model_norm or model_norm in desc):
+                selected = row
+                break
+    if selected is None:
+        hits = pricing[pricing["category"].astype(str).str.contains(category, na=False, regex=False)]
+        if len(hits):
+            selected = hits.iloc[0]
+    if selected is None:
+        return 0.0, 0.0
+    buy = float(selected.get("buy_price", 0) or 0)
+    sell_manual = float(selected.get("sell_price", 0) or 0)
+    sell = sell_manual if sell_manual else (round(buy * (1 + margin / 100), 2) if buy else 0.0)
+    return buy, sell
+
+
+def recalc_totals(items: pd.DataFrame) -> pd.DataFrame:
+    if items is None or items.empty:
+        return items
+    out = items.copy()
+    for col in ["כמות לתמחור", "מחיר קנייה", "מחיר מכירה"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0)
+    out["סהכ קנייה"] = (out["כמות לתמחור"] * out["מחיר קנייה"]).round(2)
+    out["סהכ מכירה"] = (out["כמות לתמחור"] * out["מחיר מכירה"]).round(2)
+    return out
 
 
 def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float) -> pd.DataFrame:
@@ -165,8 +197,12 @@ def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float
             if not matches:
                 continue
 
-            # לציוד נספור לפי דגם, לפריטים כלליים נסכם כשורה אחת.
-            if category in ["יחידת מיזוג", "יחידת VRF חוץ", "יחידת VRF פנים", "יחידת LG פנים", "מזגן Electra"]:
+            # ציוד, תעלות ותריסים נספרים לפי דגם/מידה כדי שלא יופיעו כשורה כללית אחת.
+            group_by_match = [
+                "יחידת מיזוג", "יחידת VRF חוץ", "יחידת VRF פנים", "יחידת LG פנים", "מזגן Electra",
+                "מפוח", "תריס / גריל", "תעלה מלבנית", "תעלה עגולה / שרשור", "מדף / דמפר"
+            ]
+            if category in group_by_match:
                 groups = pd.Series([normalize_model(x) for x in matches]).value_counts().to_dict()
             else:
                 groups = {category: len(matches)}
@@ -174,9 +210,8 @@ def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float
             for model, qty_raw in groups.items():
                 qty = int(qty_raw) * mult
                 desc = category if model == category else f"{category} {model}"
-                buy_price = find_price(pricing, category, model)
-                sell_price = round(buy_price * (1 + margin / 100), 2) if buy_price else 0.0
-                confidence = "גבוה" if category not in ["צנרת גז", "תעלות / שרשור", "תרמוסטט"] else "בינוני"
+                buy_price, sell_price = find_prices(pricing, category, model, margin)
+                confidence = "גבוה" if category in ["יחידת מיזוג", "יחידת VRF חוץ", "יחידת VRF פנים", "יחידת LG פנים", "מזגן Electra", "גלאי CO"] else "בינוני"
                 rows.append({
                     "אזור": res["section"],
                     "קובץ": res["filename"],
@@ -228,7 +263,7 @@ def make_excel(items: pd.DataFrame, project: Dict[str, str]) -> bytes:
 
 
 st.title("Venta | תמחור אוטומטי ראשוני")
-st.caption("מעלים תוכניות PDF → המערכת מפיקה כתב כמויות ותמחור. מחירון Excel הוא אופציונלי בלבד.")
+st.caption("מעלים תוכניות PDF → מגדירים קוביות עלויות → המערכת מפיקה כתב כמויות ותמחור.")
 
 with st.sidebar:
     st.header("פרטי פרויקט")
@@ -241,12 +276,41 @@ with st.sidebar:
 
 pdfs = st.file_uploader("העלה תוכניות PDF", type=["pdf"], accept_multiple_files=True)
 pricing_file = st.file_uploader("מחירון Excel אופציונלי - לא חובה", type=["xlsx", "xlsm", "xls"])
-st.caption("אם לא מעלים מחירון, המערכת משתמשת במחירון פנימי ומסמנת מחירים חסרים לאימות.")
+st.caption("אם לא מעלים מחירון, המערכת משתמשת בקוביות העלויות שמופיעות למטה ומסמנת מחירים חסרים לאימות.")
 
 if "pdf_results" not in st.session_state:
     st.session_state["pdf_results"] = []
 if "items" not in st.session_state:
     st.session_state["items"] = pd.DataFrame()
+if "cost_blocks" not in st.session_state:
+    st.session_state["cost_blocks"] = default_pricing_df()
+
+
+st.subheader("קוביות עלויות לפרויקט")
+st.caption("כאן מכניסים מחיר קנייה/מכירה לכל סוג פריט. המחירים נשמרים לריצה הנוכחית ומשמשים אוטומטית בניתוח.")
+with st.expander("פתח / ערוך קוביות עלויות", expanded=True):
+    st.session_state["cost_blocks"] = st.data_editor(
+        st.session_state["cost_blocks"],
+        use_container_width=True,
+        num_rows="dynamic",
+        column_config={
+            "key": st.column_config.TextColumn("מפתח זיהוי"),
+            "category": st.column_config.TextColumn("קטגוריה"),
+            "description": st.column_config.TextColumn("תיאור פריט"),
+            "unit": st.column_config.TextColumn("יחידה"),
+            "buy_price": st.column_config.NumberColumn("עלות קנייה", min_value=0.0, step=1.0),
+            "sell_price": st.column_config.NumberColumn("מחיר מכירה", min_value=0.0, step=1.0),
+            "notes": st.column_config.TextColumn("הערות"),
+        },
+        key="cost_blocks_editor",
+    )
+    st.download_button(
+        "הורד קוביות עלויות Excel",
+        data=st.session_state["cost_blocks"].to_csv(index=False).encode("utf-8-sig"),
+        file_name="venta_cost_blocks.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
 
 col1, col2 = st.columns([1, 1])
 with col1:
@@ -261,7 +325,7 @@ if run:
     if not pdfs:
         st.error("צריך להעלות לפחות תוכנית PDF אחת.")
     else:
-        pricing = load_pricing_from_excel(pricing_file)
+        pricing = pd.concat([st.session_state["cost_blocks"], load_pricing_from_excel(pricing_file)], ignore_index=True)
         results = []
         progress = st.progress(0)
         for i, pdf in enumerate(pdfs):
@@ -292,6 +356,7 @@ if len(st.session_state["pdf_results"]):
 st.subheader("כתב כמויות ראשוני")
 if len(st.session_state["items"]):
     edited = st.data_editor(st.session_state["items"], use_container_width=True, num_rows="dynamic")
+    edited = recalc_totals(edited)
     st.session_state["items"] = edited
     c1, c2, c3 = st.columns(3)
     buy = edited["סהכ קנייה"].sum()
