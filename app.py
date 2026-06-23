@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-st.set_page_config(page_title="Venta | תמחור אוטומטי", layout="wide")
+st.set_page_config(page_title="Venta | פינוי עשן ואוורור", layout="wide")
 
 RTL_CSS = """
 <style>
@@ -20,46 +20,44 @@ html, body, [class*="css"] { direction: rtl; text-align: right; }
 """
 st.markdown(RTL_CSS, unsafe_allow_html=True)
 
-# מחירון פנימי התחלתי. אפשר לעדכן אותו בהמשך לפי מחירון ונטה אמיתי.
+# מחירון פנימי התחלתי - ממוקד פינוי עשן, אוורור דירות וחניונים בלבד.
+# הוסר כל מה שקשור לתמחור מיזוג אוויר, VRF וצנרות גז של מיזוג.
 DEFAULT_PRICE_ROWS = [
-    {"key": "EMD-SQ-40T", "category": "יחידת מיזוג", "description": "EMD-SQ-40T 36000 BTU", "unit": "יח'", "buy_price": 0.0},
-    {"key": "EMD-SQ-50T", "category": "יחידת מיזוג", "description": "EMD-SQ-50T 48000 BTU", "unit": "יח'", "buy_price": 0.0},
-    {"key": "EMD-SQ-60T", "category": "יחידת מיזוג", "description": "EMD-SQ-60T 56000 BTU", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVOMV4PI-8", "category": "יחידת VRF חוץ", "description": "ELVOMV4PI-8", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVOMV4PI-12", "category": "יחידת VRF חוץ", "description": "ELVOMV4PI-12", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVOMV4PI-14", "category": "יחידת VRF חוץ", "description": "ELVOMV4PI-14", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVIDSLD-40", "category": "יחידת VRF פנים", "description": "ELVIDSLD-40", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVIDSHD-80", "category": "יחידת VRF פנים", "description": "ELVIDSHD-80", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVIHWD25-M9", "category": "יחידת VRF פנים", "description": "ELVIHWD25-m9", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ELVIHWD40-M9", "category": "יחידת VRF פנים", "description": "ELVIHWD40-m9", "unit": "יח'", "buy_price": 0.0},
-    {"key": "ARNU", "category": "יחידת LG פנים", "description": "LG ARNU - לפי דגם", "unit": "יח'", "buy_price": 0.0},
-    {"key": "CO", "category": "גלאי CO", "description": "גלאי CO", "unit": "יח'", "buy_price": 0.0},
-    {"key": "GAS", "category": "צנרת גז", "description": "נקודת צנרת גז", "unit": "נק'", "buy_price": 0.0},
-    {"key": "CFM", "category": "מפוח / ספיקה", "description": "מפוח לפי CFM", "unit": "יח'", "buy_price": 0.0},
-    {"key": "GRILLE", "category": "תריס / גריל", "description": "תריס / גריל לפי CFM", "unit": "יח'", "buy_price": 0.0},
-    {"key": "DUCT_RECT", "category": "תעלה מלבנית", "description": "תעלה מלבנית לפי מידה", "unit": "יח'", "buy_price": 0.0},
-    {"key": "DUCT_SHEET_M2", "category": "תעלות ופחחות", "description": "תעלות פח מלבניות - מ\"ר פח", "unit": "מ\"ר", "buy_price": 0.0},
-    {"key": "DUCT_ROUND", "category": "תעלה עגולה / שרשור", "description": "תעלה עגולה / שרשור", "unit": "יח'", "buy_price": 0.0},
-    {"key": "DUCT_ROUND_M", "category": "תעלות עגולות", "description": "תעלה עגולה / שרשור - מטר רץ", "unit": "מטר", "buy_price": 0.0},
-    {"key": "DAMPER", "category": "מדף / דמפר", "description": "מדף / דמפר", "unit": "יח'", "buy_price": 0.0},
-    {"key": "TRT", "category": "תרמוסטט / בקר", "description": "תרמוסטט / בקר", "unit": "יח'", "buy_price": 0.0},
+    {"key": "SMOKE_FAN", "category": "מפוח פינוי עשן", "description": "מפוח פינוי עשן לפי CFM / נתוני יצרן", "unit": "יח'", "buy_price": 0.0},
+    {"key": "PARKING_FAN", "category": "מפוח חניון", "description": "מפוח חניון / מפוח אוורור", "unit": "יח'", "buy_price": 0.0},
+    {"key": "APARTMENT_FAN", "category": "ונטה / מפוח דירה", "description": "ונטה / מפוח אוורור דירה", "unit": "יח'", "buy_price": 0.0},
+    {"key": "JET_FAN", "category": "Jet Fan חניון", "description": "Jet Fan חניון", "unit": "יח'", "buy_price": 0.0},
+    {"key": "CO", "category": "גלאי CO", "description": "גלאי CO לחניון", "unit": "יח'", "buy_price": 0.0},
+    {"key": "GAS_DETECTOR", "category": "גלאי GAS", "description": "גלאי גז / GAS לחניון", "unit": "יח'", "buy_price": 0.0},
+    {"key": "CO_PANEL", "category": "לוח CO / בקרה", "description": "לוח CO / בקרה לחניון", "unit": "יח'", "buy_price": 0.0},
+    {"key": "CONTROL_PANEL", "category": "לוח חשמל / בקרה", "description": "לוח חשמל / פיקוד מפוחים", "unit": "יח'", "buy_price": 0.0},
+    {"key": "GRILLE", "category": "תריס / גריל אוורור", "description": "תריס / גריל אוורור לפי CFM", "unit": "יח'", "buy_price": 0.0},
+    {"key": "LOUVER", "category": "תריס רפפה", "description": "תריס רפפה / תריס חוץ", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DUCT_SHEET_M2", "category": "תעלות פינוי עשן / אוורור", "description": "תעלות פח מלבניות - מ\"ר פח", "unit": "מ\"ר", "buy_price": 0.0},
+    {"key": "DUCT_ROUND_M", "category": "תעלות עגולות אוורור", "description": "תעלה עגולה / שרשור אוורור - מטר רץ", "unit": "מטר", "buy_price": 0.0},
+    {"key": "FIRE_DAMPER", "category": "מדף אש / עשן", "description": "מדף אש / מדף עשן", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DAMPER", "category": "מדף ויסות", "description": "מדף ויסות / דמפר", "unit": "יח'", "buy_price": 0.0},
+    {"key": "SHAFT", "category": "פיר אוורור", "description": "פיר / פתיחת אוורור", "unit": "יח'", "buy_price": 0.0},
+    {"key": "VENT_POINT", "category": "נקודת אוורור", "description": "נקודת אוורור דירה / שירותים / רחצה", "unit": "נק'", "buy_price": 0.0},
 ]
 
 DEFAULT_PATTERNS = [
-    ("יחידת מיזוג", r"EMD[-\s]*A?[-\s]*SQ[-\s]*(?:40|50|60)\s*T", "יח'"),
-    ("יחידת VRF חוץ", r"ELVOMV4PI[-\s]*(?:8|12|14)", "יח'"),
-    ("יחידת VRF פנים", r"ELVID(?:S|H)?[A-Z0-9\-]*|ELVIHWD\d+[-\s]*m9", "יח'"),
-    ("יחידת LG פנים", r"ARNU\d+[A-Z0-9]+", "יח'"),
-    ("מזגן Electra", r"Electra\s+aaa\s+INV\s+180", "יח'"),
     ("גלאי CO", r"\bCO\b", "יח'"),
-    ("צנרת גז", r"\bGAS\b", "נק'"),
-    ("מפוח", r"(?:\d{4,6}\s*cfm|\b[0-9]{3}[-\s]*[0-9]{2}[-\s]*[0-9]{3}\b)", "יח'"),
-    ("תריס / גריל", r"(?:250|300|350|400|450|500|600|700|800)\s*cfm", "יח'"),
+    ("גלאי GAS", r"\bGAS\b", "יח'"),
+    ("מפוח פינוי עשן", r"(?:פינוי\s*עשן|שחרור\s*עשן|מפוח\s*עשן|smoke\s*fan|\d{4,6}\s*cfm|\b[0-9]{3}[-\s]*[0-9]{2}[-\s]*[0-9]{3}\b)", "יח'"),
+    ("מפוח חניון", r"(?:מפוח\s*חניון|אוורור\s*חניון|parking\s*fan|exhaust\s*fan|EF[-\s]*\d+|SF[-\s]*\d+)", "יח'"),
+    ("ונטה / מפוח דירה", r"(?:ונטה|מפוח\s*דירה|מפוח\s*שירותים|מפוח\s*רחצה|venta|bathroom\s*fan)", "יח'"),
+    ("Jet Fan חניון", r"(?:jet\s*fan|ג'ט\s*פן|סילוני)", "יח'"),
+    ("תריס / גריל אוורור", r"(?:250|300|350|400|450|500|600|700|800|1000|1300|1600)\s*cfm|תריס|גריל|רשת", "יח'"),
+    ("תריס רפפה", r"(?:רפפה|louver|louvre)", "יח'"),
     ("תעלה מלבנית", r"\b(?:60|80|100|120|130|160|185|230|310|400)\s*/\s*(?:30|40|50|60|80)\b", "יח'"),
     ("תעלה עגולה / שרשור", r"Ø\s*\d+\s*(?:cm|\")|\b(?:6|8|10|12)\s*\"", "יח'"),
-    ("מדף / דמפר", r"\b(?:FD|MD|FSD|DAMPER)\b|מדף|דמפר", "יח'"),
-    ("תרמוסטט / בקר", r"\bTrT\b|\bT[1-4]\b", "יח'"),
-    ("לוח חשמל / בקרה", r"לוח|כבילה|בקרה|CO\s*PANEL", "יח'"),
+    ("מדף אש / עשן", r"\b(?:FD|FSD|SFD|SD)\b|מדף\s*אש|מדף\s*עשן|דמפר\s*עשן", "יח'"),
+    ("מדף ויסות", r"\b(?:MD|VD|DAMPER)\b|מדף|דמפר", "יח'"),
+    ("לוח CO / בקרה", r"לוח\s*CO|מערכת\s*CO|CO\s*PANEL|בקרת\s*CO", "יח'"),
+    ("לוח חשמל / בקרה", r"לוח|כבילה|בקרה|פיקוד|אינטגרציה", "יח'"),
+    ("פיר אוורור", r"פיר\s*אוורור|פיר\s*עשן|פיר\s*שחרור", "יח'"),
+    ("נקודת אוורור", r"אוורור\s*(?:שירותים|רחצה|מטבח|דירה)|יניקה\s*(?:שירותים|רחצה|מטבח)", "נק'"),
 ]
 
 SECTION_KEYWORDS = {
@@ -137,7 +135,7 @@ def load_pricing_from_excel(uploaded) -> pd.DataFrame:
             desc = None
             for v in vals:
                 if isinstance(v, str) and len(v.strip()) > 2:
-                    if any(k in v for k in ["מפוח", "תריס", "ברך", "פחחות", "מדף", "לוח", "כבילה", "ונטה", "גלאי", "צנרת", "EMD", "ELVO", "ELVI", "ARNU"]):
+                    if any(k in v for k in ["מפוח", "תריס", "רפפה", "ברך", "פחחות", "מדף", "דמפר", "לוח", "כבילה", "ונטה", "גלאי", "CO", "עשן", "חניון", "אוורור"]):
                         desc = v.strip()
                         break
             if not desc:
@@ -228,11 +226,11 @@ def estimate_duct_measurements(pdf_results: List[dict], pricing: pd.DataFrame, m
             length_m = float(count) * rect_m_per_label * mult
             perimeter_m = 2 * ((w_cm / 100.0) + (h_cm / 100.0))
             sheet_m2 = length_m * perimeter_m * (1 + waste_pct / 100.0)
-            buy_price, sell_price = find_prices(pricing, "תעלות ופחחות", "DUCT_SHEET_M2", margin)
+            buy_price, sell_price = find_prices(pricing, "תעלות פינוי עשן / אוורור", "DUCT_SHEET_M2", margin)
             rows.append({
                 "אזור": section,
                 "קובץ": filename,
-                "קטגוריה": "תעלות ופחחות",
+                "קטגוריה": "תעלות פינוי עשן / אוורור",
                 "תיאור": f"תעלה מלבנית {dim} - אומדן מ\"ר פח",
                 "יחידה": "מ\"ר",
                 "כמות מזוהה": int(count),
@@ -253,11 +251,11 @@ def estimate_duct_measurements(pdf_results: List[dict], pricing: pd.DataFrame, m
             if not d:
                 continue
             length_m = float(count) * round_m_per_label * mult
-            buy_price, sell_price = find_prices(pricing, "תעלות עגולות", "DUCT_ROUND_M", margin)
+            buy_price, sell_price = find_prices(pricing, "תעלות עגולות אוורור", "DUCT_ROUND_M", margin)
             rows.append({
                 "אזור": section,
                 "קובץ": filename,
-                "קטגוריה": "תעלות עגולות",
+                "קטגוריה": "תעלות עגולות אוורור",
                 "תיאור": f"תעלה עגולה / שרשור Ø{int(d)} - אומדן מטר רץ",
                 "יחידה": "מטר",
                 "כמות מזוהה": int(count),
@@ -288,8 +286,8 @@ def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float
 
             # ציוד, תעלות ותריסים נספרים לפי דגם/מידה כדי שלא יופיעו כשורה כללית אחת.
             group_by_match = [
-                "יחידת מיזוג", "יחידת VRF חוץ", "יחידת VRF פנים", "יחידת LG פנים", "מזגן Electra",
-                "מפוח", "תריס / גריל", "תעלה מלבנית", "תעלה עגולה / שרשור", "מדף / דמפר"
+                "מפוח פינוי עשן", "מפוח חניון", "ונטה / מפוח דירה", "Jet Fan חניון",
+                "תריס / גריל אוורור", "תריס רפפה", "תעלה מלבנית", "תעלה עגולה / שרשור", "מדף אש / עשן", "מדף ויסות", "גלאי CO", "גלאי GAS"
             ]
             if category in group_by_match:
                 groups = pd.Series([normalize_model(x) for x in matches]).value_counts().to_dict()
@@ -300,7 +298,7 @@ def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float
                 qty = int(qty_raw) * mult
                 desc = category if model == category else f"{category} {model}"
                 buy_price, sell_price = find_prices(pricing, category, model, margin)
-                confidence = "גבוה" if category in ["יחידת מיזוג", "יחידת VRF חוץ", "יחידת VRF פנים", "יחידת LG פנים", "מזגן Electra", "גלאי CO"] else "בינוני"
+                confidence = "גבוה" if category in ["גלאי CO", "גלאי GAS", "מפוח פינוי עשן", "מפוח חניון", "ונטה / מפוח דירה", "Jet Fan חניון"] else "בינוני"
                 rows.append({
                     "אזור": res["section"],
                     "קובץ": res["filename"],
@@ -351,8 +349,8 @@ def make_excel(items: pd.DataFrame, project: Dict[str, str]) -> bytes:
     return output.getvalue()
 
 
-st.title("Venta | תמחור אוטומטי ראשוני")
-st.caption("מעלים תוכניות PDF → מגדירים קוביות עלויות → המערכת מפיקה כתב כמויות, תעלות ותמחור.")
+st.title("Venta | פינוי עשן ואוורור - תמחור אוטומטי ראשוני")
+st.caption("מעלים תוכניות PDF → המערכת מתמקדת בפינוי עשן, אוורור דירות וחניונים בלבד.")
 
 with st.sidebar:
     st.header("פרטי פרויקט")
@@ -369,8 +367,9 @@ with st.sidebar:
     duct_waste_pct = st.number_input("פחת תעלות %", min_value=0.0, max_value=50.0, value=12.0, step=1.0)
 
 pdfs = st.file_uploader("העלה תוכניות PDF", type=["pdf"], accept_multiple_files=True)
-pricing_file = st.file_uploader("מחירון Excel אופציונלי - לא חובה", type=["xlsx", "xlsm", "xls"])
+pricing_file = st.file_uploader("מחירון Excel אופציונלי - פינוי עשן / אוורור בלבד", type=["xlsx", "xlsm", "xls"])
 st.caption("אם לא מעלים מחירון, המערכת משתמשת בקוביות העלויות שמופיעות למטה ומסמנת מחירים חסרים לאימות.")
+st.info("המערכת מסננת החוצה מיזוג אוויר: VRF, יחידות פנים/חוץ וצנרת גז של מיזוג לא נכללים בכתב הכמויות.")
 
 if "pdf_results" not in st.session_state:
     st.session_state["pdf_results"] = []
