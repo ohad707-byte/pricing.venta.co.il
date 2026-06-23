@@ -3,6 +3,7 @@ import re
 from typing import Dict, List, Tuple
 
 import fitz
+import math
 import pandas as pd
 import streamlit as st
 from PIL import Image
@@ -37,7 +38,9 @@ DEFAULT_PRICE_ROWS = [
     {"key": "CFM", "category": "מפוח / ספיקה", "description": "מפוח לפי CFM", "unit": "יח'", "buy_price": 0.0},
     {"key": "GRILLE", "category": "תריס / גריל", "description": "תריס / גריל לפי CFM", "unit": "יח'", "buy_price": 0.0},
     {"key": "DUCT_RECT", "category": "תעלה מלבנית", "description": "תעלה מלבנית לפי מידה", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DUCT_SHEET_M2", "category": "תעלות ופחחות", "description": "תעלות פח מלבניות - מ\"ר פח", "unit": "מ\"ר", "buy_price": 0.0},
     {"key": "DUCT_ROUND", "category": "תעלה עגולה / שרשור", "description": "תעלה עגולה / שרשור", "unit": "יח'", "buy_price": 0.0},
+    {"key": "DUCT_ROUND_M", "category": "תעלות עגולות", "description": "תעלה עגולה / שרשור - מטר רץ", "unit": "מטר", "buy_price": 0.0},
     {"key": "DAMPER", "category": "מדף / דמפר", "description": "מדף / דמפר", "unit": "יח'", "buy_price": 0.0},
     {"key": "TRT", "category": "תרמוסטט / בקר", "description": "תרמוסטט / בקר", "unit": "יח'", "buy_price": 0.0},
 ]
@@ -187,12 +190,98 @@ def recalc_totals(items: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float) -> pd.DataFrame:
+
+def parse_rect_dim(dim: str) -> Tuple[float, float] | None:
+    m = re.search(r"(\d{2,3})\s*/\s*(\d{2,3})", str(dim))
+    if not m:
+        return None
+    w, h = float(m.group(1)), float(m.group(2))
+    return w, h
+
+
+def parse_round_dim(dim: str) -> float | None:
+    txt = str(dim).replace(" ", "")
+    m = re.search(r"Ø?(\d{1,2})(?:\"|IN|inch)?", txt, flags=re.I)
+    if not m:
+        return None
+    return float(m.group(1))
+
+
+def estimate_duct_measurements(pdf_results: List[dict], pricing: pd.DataFrame, margin: float, rect_m_per_label: float, round_m_per_label: float, waste_pct: float) -> pd.DataFrame:
+    """מדידת תעלות ראשונית לפי סימוני מידות בתוכנית.
+    זו לא מדידה וקטורית מלאה; היא מייצרת בסיס תמחור לפי מופעי מידה, קנ"מ/אורך ברירת מחדל ומקדם קומות.
+    """
+    rows = []
+    for res in pdf_results:
+        text = res["text"]
+        mult = res["multiplier"]
+        section = res["section"]
+        filename = res["filename"]
+
+        rect_matches = [m.group(0) for m in re.finditer(r"\b(?:60|80|100|120|130|160|185|230|310|400)\s*/\s*(?:30|40|50|60|80)\b", text, flags=re.I)]
+        rect_groups = pd.Series([re.sub(r"\s+", "", x) for x in rect_matches]).value_counts().to_dict() if rect_matches else {}
+        for dim, count in rect_groups.items():
+            parsed = parse_rect_dim(dim)
+            if not parsed:
+                continue
+            w_cm, h_cm = parsed
+            length_m = float(count) * rect_m_per_label * mult
+            perimeter_m = 2 * ((w_cm / 100.0) + (h_cm / 100.0))
+            sheet_m2 = length_m * perimeter_m * (1 + waste_pct / 100.0)
+            buy_price, sell_price = find_prices(pricing, "תעלות ופחחות", "DUCT_SHEET_M2", margin)
+            rows.append({
+                "אזור": section,
+                "קובץ": filename,
+                "קטגוריה": "תעלות ופחחות",
+                "תיאור": f"תעלה מלבנית {dim} - אומדן מ\"ר פח",
+                "יחידה": "מ\"ר",
+                "כמות מזוהה": int(count),
+                "מקדם קומות": mult,
+                "כמות לתמחור": round(sheet_m2, 2),
+                "מחיר קנייה": buy_price,
+                "מחיר מכירה": sell_price,
+                "סהכ קנייה": round(sheet_m2 * buy_price, 2),
+                "סהכ מכירה": round(sheet_m2 * sell_price, 2),
+                "ביטחון": "בינוני",
+                "הערה": f"אומדן: {length_m:.1f} מטר רץ, היקף {perimeter_m:.2f} מ', פחת {waste_pct:.0f}%" + ("; מחיר חסר" if buy_price == 0 else ""),
+            })
+
+        round_matches = [m.group(0) for m in re.finditer(r"Ø\s*\d+\s*(?:cm|\")|\b(?:6|8|10|12)\s*\"", text, flags=re.I)]
+        round_groups = pd.Series([re.sub(r"\s+", "", x).replace('Ø','') for x in round_matches]).value_counts().to_dict() if round_matches else {}
+        for dim, count in round_groups.items():
+            d = parse_round_dim(dim)
+            if not d:
+                continue
+            length_m = float(count) * round_m_per_label * mult
+            buy_price, sell_price = find_prices(pricing, "תעלות עגולות", "DUCT_ROUND_M", margin)
+            rows.append({
+                "אזור": section,
+                "קובץ": filename,
+                "קטגוריה": "תעלות עגולות",
+                "תיאור": f"תעלה עגולה / שרשור Ø{int(d)} - אומדן מטר רץ",
+                "יחידה": "מטר",
+                "כמות מזוהה": int(count),
+                "מקדם קומות": mult,
+                "כמות לתמחור": round(length_m * (1 + waste_pct / 100.0), 2),
+                "מחיר קנייה": buy_price,
+                "מחיר מכירה": sell_price,
+                "סהכ קנייה": round(length_m * (1 + waste_pct / 100.0) * buy_price, 2),
+                "סהכ מכירה": round(length_m * (1 + waste_pct / 100.0) * sell_price, 2),
+                "ביטחון": "בינוני",
+                "הערה": f"אומדן לפי {round_m_per_label:.1f} מטר לכל סימון, פחת {waste_pct:.0f}%" + ("; מחיר חסר" if buy_price == 0 else ""),
+            })
+
+    columns = ["אזור", "קובץ", "קטגוריה", "תיאור", "יחידה", "כמות מזוהה", "מקדם קומות", "כמות לתמחור", "מחיר קנייה", "מחיר מכירה", "סהכ קנייה", "סהכ מכירה", "ביטחון", "הערה"]
+    return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
+
+def identify_items(pdf_results: List[dict], pricing: pd.DataFrame, margin: float, include_text_duct_counts: bool = False) -> pd.DataFrame:
     rows = []
     for res in pdf_results:
         text = res["text"]
         mult = res["multiplier"]
         for category, pattern, unit in DEFAULT_PATTERNS:
+            if (not include_text_duct_counts) and category in ["תעלה מלבנית", "תעלה עגולה / שרשור"]:
+                continue
             matches = [m.group(0) for m in re.finditer(pattern, text, flags=re.I)]
             if not matches:
                 continue
@@ -263,7 +352,7 @@ def make_excel(items: pd.DataFrame, project: Dict[str, str]) -> bytes:
 
 
 st.title("Venta | תמחור אוטומטי ראשוני")
-st.caption("מעלים תוכניות PDF → מגדירים קוביות עלויות → המערכת מפיקה כתב כמויות ותמחור.")
+st.caption("מעלים תוכניות PDF → מגדירים קוביות עלויות → המערכת מפיקה כתב כמויות, תעלות ותמחור.")
 
 with st.sidebar:
     st.header("פרטי פרויקט")
@@ -273,6 +362,11 @@ with st.sidebar:
         "consultant": st.text_input("יועץ", "מארו"),
     }
     margin = st.number_input("אחוז העמסה למכירה", min_value=0.0, max_value=100.0, value=25.0, step=1.0)
+    st.divider()
+    st.subheader("מדידת תעלות")
+    rect_m_per_label = st.number_input("מטר רץ לכל סימון תעלה מלבנית", min_value=0.1, max_value=20.0, value=3.0, step=0.5)
+    round_m_per_label = st.number_input("מטר רץ לכל סימון תעלה עגולה", min_value=0.1, max_value=20.0, value=2.0, step=0.5)
+    duct_waste_pct = st.number_input("פחת תעלות %", min_value=0.0, max_value=50.0, value=12.0, step=1.0)
 
 pdfs = st.file_uploader("העלה תוכניות PDF", type=["pdf"], accept_multiple_files=True)
 pricing_file = st.file_uploader("מחירון Excel אופציונלי - לא חובה", type=["xlsx", "xlsm", "xls"])
@@ -340,7 +434,9 @@ if run:
             })
             progress.progress((i + 1) / len(pdfs))
         st.session_state["pdf_results"] = results
-        st.session_state["items"] = identify_items(results, pricing, margin)
+        base_items = identify_items(results, pricing, margin, include_text_duct_counts=False)
+        duct_items = estimate_duct_measurements(results, pricing, margin, rect_m_per_label, round_m_per_label, duct_waste_pct)
+        st.session_state["items"] = pd.concat([base_items, duct_items], ignore_index=True)
         st.success("הניתוח הסתיים. בדוק את הטבלה לפני יצוא.")
 
 if len(st.session_state["pdf_results"]):
@@ -352,6 +448,13 @@ if len(st.session_state["pdf_results"]):
         img = next((r["preview"] for r in st.session_state["pdf_results"] if r["filename"] == sel), None)
         if img is not None:
             st.image(img, use_container_width=True)
+
+st.subheader("מדידת תעלות ראשונית")
+st.caption("התעלות מחושבות לפי סימוני מידה שמופיעים בתוכנית: מידה מלבנית × אורך ברירת מחדל × מקדם קומות × פחת. בהמשך ניתן להחליף למדידה ויזואלית לפי קווים וקנ\"מ.")
+if len(st.session_state["items"]):
+    duct_view = st.session_state["items"][st.session_state["items"]["קטגוריה"].astype(str).str.contains("תעלות", na=False)]
+    if len(duct_view):
+        st.dataframe(duct_view, use_container_width=True, hide_index=True)
 
 st.subheader("כתב כמויות ראשוני")
 if len(st.session_state["items"]):
