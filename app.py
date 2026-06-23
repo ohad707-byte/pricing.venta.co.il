@@ -366,8 +366,8 @@ with st.sidebar:
     round_m_per_label = st.number_input("מטר רץ לכל סימון תעלה עגולה", min_value=0.1, max_value=20.0, value=2.0, step=0.5)
     duct_waste_pct = st.number_input("פחת תעלות %", min_value=0.0, max_value=50.0, value=12.0, step=1.0)
     st.caption("חשוב: כדי שהתעלות יתומחרו בכסף, מלא מחיר בקוביות DUCT_SHEET_M2 ו- DUCT_ROUND_M או בשדות מהירים למטה.")
-    duct_sheet_buy_quick = st.number_input("עלות מ"ר תעלות פח", min_value=0.0, value=0.0, step=10.0)
-    duct_sheet_sell_quick = st.number_input("מחיר מכירה מ"ר תעלות פח", min_value=0.0, value=0.0, step=10.0)
+    duct_sheet_buy_quick = st.number_input('עלות מ"ר תעלות פח', min_value=0.0, value=0.0, step=10.0)
+    duct_sheet_sell_quick = st.number_input('מחיר מכירה מ"ר תעלות פח', min_value=0.0, value=0.0, step=10.0)
     duct_round_buy_quick = st.number_input("עלות מטר תעלה עגולה/שרשור", min_value=0.0, value=0.0, step=5.0)
     duct_round_sell_quick = st.number_input("מחיר מכירה מטר תעלה עגולה/שרשור", min_value=0.0, value=0.0, step=5.0)
 
@@ -476,7 +476,7 @@ if len(st.session_state["items"]):
             st.warning("נמצאו תעלות, אבל המחיר יצא 0 כי לא הוגדר מחיר בקוביית DUCT_SHEET_M2 / DUCT_ROUND_M. מלא מחיר בקוביות העלויות או בשדות המהירים בסרגל הצד והריץ שוב.")
         st.dataframe(duct_view, use_container_width=True, hide_index=True)
     else:
-        st.warning("לא נמצאו תעלות לפי OCR. בתוכניות סרוקות/עמוסות ייתכן שהמידות קיימות כגרפיקה בלבד. במקרה כזה צריך מדידה ידנית/ויזואלית לפי קנ"מ.")
+        st.warning('לא נמצאו תעלות לפי OCR. בתוכניות סרוקות/עמוסות ייתכן שהמידות קיימות כגרפיקה בלבד. במקרה כזה צריך מדידה ידנית/ויזואלית לפי קנ"מ.')
 
 st.subheader("כתב כמויות ראשוני")
 if len(st.session_state["items"]):
