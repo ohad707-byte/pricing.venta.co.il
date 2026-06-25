@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 app.py
-Venta Auto Pricer v3 - ממשק Streamlit לחילוץ ותמחור פריטי אוורור/פינוי עשן
-מתוכניות PDF, מפוצל לקטגוריות: תעלות / מפוחים ומשתיקים / ונטות לפי יעד.
+Venta Auto Pricer v3 (OCR בלבד) - ממשק Streamlit לחילוץ ותמחור פריטי
+אוורור/פינוי עשן מתוכניות PDF, מפוצל לקטגוריות: תעלות / מפוחים ומשתיקים /
+ונטות לפי יעד.
 
-תומך בשני מסלולי חילוץ נפרדים (ראו extraction.py):
-  - "ocr"    : Tesseract+heb, עצמאי לחלוטין, לא תלוי ב-API חיצוני.
-  - "claude" : Anthropic API, מדויק יותר על תוויות מוטות, עולה כסף לפי קריאה.
+חילוץ הנתונים מתבצע במלואו באמצעות Tesseract OCR (חבילת שפה עברית) -
+עצמאי לחלוטין, רץ מקומית על המחשב, לא תלוי בשום API חיצוני ולא דורש רשת
+בזמן הריצה (מעבר להתקנה החד-פעמית של הספריות).
 """
 import re
 
@@ -57,7 +58,7 @@ def floor_multiplier(filename: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# סיידבר: פרטי פרויקט + בחירת מסלול חילוץ
+# סיידבר: פרטי פרויקט + הגדרות חילוץ
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("פרטי פרויקט")
@@ -69,29 +70,23 @@ with st.sidebar:
     margin = st.number_input("אחוז העמסה למכירה", min_value=0.0, max_value=100.0, value=25.0, step=1.0)
 
     st.divider()
-    st.subheader("מסלול חילוץ נתונים")
+    st.subheader("חילוץ נתונים (OCR עברית)")
     ocr_ready = tesseract_heb_available()
-    mode_label = st.radio(
-        "בחר שיטת קריאת תוכניות",
-        options=["OCR (Tesseract עברית) - עצמאי", "Claude API - חזותי, מדויק יותר"],
-        index=0 if ocr_ready else 1,
-    )
-    extraction_mode = "ocr" if mode_label.startswith("OCR") else "claude"
+    extraction_mode = "ocr"
 
-    if extraction_mode == "ocr" and not ocr_ready:
+    if ocr_ready:
+        st.success("Tesseract + חבילת שפה עברית מותקנים. ✓")
+    else:
         st.error(
-            "Tesseract או חבילת השפה העברית (heb) לא מותקנים במערכת זו. "
-            "התקן עם: `sudo apt-get install tesseract-ocr tesseract-ocr-heb` "
-            "ו-`pip install pytesseract`, ואז רענן את הדף."
+            "Tesseract OCR או חבילת השפה העברית (heb) לא מותקנים במחשב הזה.\n\n"
+            "כדי להתקין:\n"
+            "1. הורד והרץ את המתקין מ: "
+            "https://github.com/UB-Mannheim/tesseract/wiki\n"
+            "2. בזמן ההתקנה, חובה לסמן את חבילת השפה **Hebrew** "
+            "ברשימת ה-Additional language data.\n"
+            "3. סגור ופתח מחדש את האפליקציה (Ctrl+C בטרמינל, ואז `streamlit run app.py` מחדש)."
         )
-
-    api_key = ""
-    claude_model = "claude-sonnet-4-6"
-    if extraction_mode == "claude":
-        api_key = st.text_input("מפתח Anthropic API", type="password",
-                                 help="אפשר גם להגדיר כמשתנה סביבה ANTHROPIC_API_KEY")
-        claude_model = st.selectbox("מודל", ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"])
-        st.caption("שימוש ב-API חיצוני עולה כסף לפי בקשה ודורש חיבור רשת.")
+        st.stop()
 
     render_dpi = st.slider("רזולוציית רינדור (DPI)", min_value=100, max_value=250, value=150, step=10,
                             help="רזולוציה גבוהה יותר = קריאה מדויקת יותר של תוויות קטנות, אך איטי יותר.")
@@ -103,7 +98,7 @@ st.caption("מעלים תוכניות PDF → המערכת מחלצת ומפצל
 
 pdfs = st.file_uploader("העלה תוכניות PDF", type=["pdf"], accept_multiple_files=True)
 pricing_file = st.file_uploader("מחירון Excel אופציונלי", type=["xlsx", "xlsm", "xls"])
-st.info(f"מסלול חילוץ נוכחי: **{'OCR עברית (עצמאי)' if extraction_mode == 'ocr' else 'Claude API (חזותי)'}**")
+st.info("מסלול חילוץ: **OCR עברית (Tesseract, רץ מקומית)**")
 
 if "items" not in st.session_state:
     st.session_state["items"] = []  # List[ExtractedItem]
@@ -114,7 +109,7 @@ st.subheader("קוביות עלויות לפרויקט")
 with st.expander("פתח / ערוך קוביות עלויות", expanded=True):
     st.session_state["cost_blocks"] = st.data_editor(
         st.session_state["cost_blocks"],
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         column_config={
             "category": st.column_config.TextColumn("קטגוריה"),
@@ -129,17 +124,15 @@ with st.expander("פתח / ערוך קוביות עלויות", expanded=True):
 
 col1, col2 = st.columns([1, 1])
 with col1:
-    run = st.button("נתח תוכניות והפק תמחור", type="primary", use_container_width=True)
+    run = st.button("נתח תוכניות והפק תמחור", type="primary", width="stretch")
 with col2:
-    clear = st.button("נקה", use_container_width=True)
+    clear = st.button("נקה", width="stretch")
 if clear:
     st.session_state["items"] = []
 
 if run:
     if not pdfs:
         st.error("צריך להעלות לפחות תוכנית PDF אחת.")
-    elif extraction_mode == "claude" and not api_key:
-        st.error("נבחר מסלול Claude API - יש להזין מפתח API בסיידבר.")
     else:
         pricing = pd.concat([st.session_state["cost_blocks"], load_pricing_from_excel(pricing_file)], ignore_index=True)
         all_items = []
@@ -158,8 +151,7 @@ if run:
             try:
                 items = extract_items(
                     pdf_bytes, source_file=pdf.name, section=section, floor_multiplier=mult,
-                    mode=extraction_mode, api_key=api_key, model=claude_model,
-                    dpi=render_dpi, cols=tile_cols, progress_cb=_cb,
+                    mode="ocr", dpi=render_dpi, cols=tile_cols, progress_cb=_cb,
                 )
                 all_items.extend(items)
             except Exception as exc:
@@ -188,7 +180,7 @@ if st.session_state["items"]:
             if sub.empty:
                 st.info("לא נמצאו פריטים בקטגוריה זו.")
                 continue
-            st.dataframe(sub, use_container_width=True, hide_index=True)
+            st.dataframe(sub, width="stretch", hide_index=True)
             c1, c2 = st.columns(2)
             c1.metric("סהכ קנייה", f"{sub['סהכ קנייה'].sum():,.0f} ₪")
             c2.metric("סהכ מכירה", f"{sub['סהכ מכירה'].sum():,.0f} ₪")
@@ -211,7 +203,7 @@ if st.session_state["items"]:
         data=excel_bytes,
         file_name="venta_pricing_by_category.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+        width="stretch",
         type="primary",
     )
 else:

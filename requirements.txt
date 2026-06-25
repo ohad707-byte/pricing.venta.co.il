@@ -9,14 +9,12 @@ PyMuPDF>=1.23
 Pillow>=10.0
 xlsxwriter>=3.1
 
-# מסלול OCR (ברירת מחדל, עצמאי) - דורש גם התקנת מערכת (לא רק pip):
+# חילוץ נתונים מתוכניות PDF מתבצע באמצעות OCR (Tesseract) - דורש גם
+# התקנת מערכת בנפרד (לא רק pip):
 #   Windows: הורד והתקן מ- https://github.com/UB-Mannheim/tesseract/wiki
-#            בזמן ההתקנה סמן את חבילת השפה "Hebrew" (heb) ברשימת ה-Additional language data.
+#            בזמן ההתקנה סמן את חבילת השפה "Hebrew" ברשימת ה-Additional language data.
 #            אם ה-PATH לא מתעדכן אוטומטית, ייתכן שתצטרך להוסיף ידנית את
 #            תיקיית ההתקנה (בדרך כלל C:\Program Files\Tesseract-OCR) למשתנה הסביבה PATH.
 #   Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-heb
 #   macOS:         brew install tesseract tesseract-lang
 pytesseract>=0.3.10
-
-# מסלול Claude API (אופציונלי, חזותי ומדויק יותר) - דורש מפתח API ורשת
-anthropic>=0.40.0
