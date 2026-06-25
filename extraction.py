@@ -24,7 +24,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from typing import List, Tuple
 
 import fitz  # PyMuPDF
@@ -53,11 +52,29 @@ RENDER_DPI_DEFAULT = 150  # רזולוציה גבוהה - קריטי לקריא�
 
 
 def tesseract_heb_available() -> bool:
-    """בודק אם Tesseract מותקן וחבילת השפה העברית קיימת בפועל."""
-    if shutil.which("tesseract") is None:
+    """בודק אם Tesseract מותקן וחבילת השפה העברית קיימת בפועל.
+    בודק גם PATH (shutil.which) וגם מיקומי התקנה נפוצים ב-Windows, כי
+    מתקין Tesseract ל-Windows לא תמיד מוסיף את עצמו אוטומטית ל-PATH."""
+    tesseract_cmd = shutil.which("tesseract")
+    if tesseract_cmd is None:
+        # מיקומי התקנה נפוצים ב-Windows (UB-Mannheim installer)
+        common_windows_paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ]
+        for path in common_windows_paths:
+            if os.path.isfile(path):
+                tesseract_cmd = path
+                try:
+                    import pytesseract
+                    pytesseract.pytesseract.tesseract_cmd = path
+                except ImportError:
+                    pass
+                break
+    if tesseract_cmd is None:
         return False
     try:
-        out = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10)
+        out = subprocess.run([tesseract_cmd, "--list-langs"], capture_output=True, text=True, timeout=10)
         return "heb" in out.stdout
     except Exception:
         return False

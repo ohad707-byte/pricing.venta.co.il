@@ -50,12 +50,60 @@ brew install tesseract tesseract-lang
 והערכים (CFM/Pa/קוטר) שחזרו תואמים את מה שבאמת רשום בתוכנית. אם לא - לעבור
 למסלול Claude API.
 
-## הרצה
+## הרצה ב-Windows - שלב אחר שלב
+
+מומלץ במיוחד אם המחשב נמצא ברשת חברה/מוסד עם פילטור אבטחה (Cisco Umbrella
+וכדומה) שעלול לחסום אירוח בענן כמו Streamlit Cloud - הרצה מקומית (`localhost`)
+לא עוברת ברשת בכלל ולכן לא נתקלת בחסימות כאלה.
+
+1. **התקנת Python** (אם עדיין לא מותקן): הורד מ-**python.org** (גרסה 3.10
+   ומעלה) - לא מ-Microsoft Store ולא מ-Chocolatey, כדי למנוע בעיות build.
+   בזמן ההתקנה סמן **"Add python.exe to PATH"**.
+   בדיקה ב-Command Prompt: `python --version`
+
+2. **חילוץ הקבצים** לתיקייה, למשל `C:\venta_app\` (ודא שה-`.py` נמצאים ישירות
+   בתיקייה, לא בתוך תיקייה מקוננת נוספת).
+
+3. **התקנת התלויות**:
+   ```
+   cd C:\venta_app
+   pip install -r requirements.txt
+   ```
+   כל החבילות ב-`requirements.txt` כוללות wheel מוכן ל-Windows ולא דורשות
+   קומפילציה/Visual Studio.
+
+4. **(רק למסלול OCR) התקנת Tesseract + עברית**: הורד והרץ את המתקין מ-
+   https://github.com/UB-Mannheim/tesseract/wiki - **בזמן ההתקנה חובה לסמן
+   את חבילת השפה "Hebrew" ברשימת "Additional language data"**, אחרת `heb`
+   לא תהיה זמינה והאפליקציה תציג שגיאה ברורה על כך בסיידבר.
+   אם לאחר ההתקנה האפליקציה עדיין לא מזהה את Tesseract, ייתכן שצריך להוסיף
+   ידנית את `C:\Program Files\Tesseract-OCR` למשתנה הסביבה `PATH` (חיפוש
+   "Environment Variables" בתפריט ההתחלה של Windows) ולפתוח Command Prompt
+   חדש. (הקוד כבר בודק גם את מיקום ההתקנה הסטנדרטי הזה אוטומטית כגיבוי.)
+
+   אם תעדיף לדלג על OCR ולהשתמש במסלול Claude API במקום - אפשר לדלג על
+   השלב הזה לחלוטין ולבחור "Claude API" בסיידבר באפליקציה.
+
+5. **הרצה**:
+   ```
+   streamlit run app.py
+   ```
+   זה ייפתח טאב בדפדפן בכתובת `http://localhost:8501` - רץ רק על המחשב שלך.
+
+   להגדרת מפתח Anthropic API כמשתנה סביבה קבוע ב-Windows (אופציונלי - אפשר
+   גם להזין ידנית בסיידבר בכל הרצה): ב-Command Prompt להרצה חד-פעמית בסשן:
+   ```
+   set ANTHROPIC_API_KEY=your-key-here
+   ```
+   או דרך "Environment Variables" במערכת כדי שיישמר בין הפעלות.
+
+## הרצה (Linux / macOS)
 
 ```bash
 pip install -r requirements.txt
 # מסלול OCR בלבד דורש גם:
-#   sudo apt-get install tesseract-ocr tesseract-ocr-heb
+#   sudo apt-get install tesseract-ocr tesseract-ocr-heb   (Ubuntu/Debian)
+#   brew install tesseract tesseract-lang                   (macOS)
 streamlit run app.py
 ```
 
