@@ -4,3 +4,11 @@ openpyxl>=3.1
 PyMuPDF>=1.23
 Pillow>=10.0
 xlsxwriter>=3.1
+
+# מסלול OCR (ברירת מחדל, עצמאי) - דורש גם התקנת מערכת:
+#   Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-heb
+#   macOS:         brew install tesseract tesseract-lang
+pytesseract>=0.3.10
+
+# מסלול Claude API (אופציונלי, חזותי ומדויק יותר) - דורש מפתח API
+anthropic>=0.40.0
